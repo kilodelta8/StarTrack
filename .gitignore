@@ -1,4 +1,6 @@
-/.vscode
-/notes.txt
+/.vscode/
+.vscode
+notes.txt
+notes.txt
 /WebApp/venv
 /WebApp/de421.bsp
