@@ -1,6 +1,6 @@
 # Star Track Project: Satellite Tracking Antenna
 
-![Star Track Web App Interface](./assets/WebApp01.png)
+![Star Track Project Logo](./assets/logo002.png)
 
 ## Phase 1: Planning and System Design (Steps 1 & 2)
 
@@ -52,6 +52,8 @@ The raw torque of a *NEMA 17* motor is insufficient to move a yagi antenna with 
 ... (Remaining sections unchanged)
 
 ## Phase 3: Software Development and Integration (Step 4)
+
+![Star Track Web App Interface](./assets/WebApp01.png)
 
 ### 3.1 Communication and Control Protocol Refined (Addressing User Questions)
 
