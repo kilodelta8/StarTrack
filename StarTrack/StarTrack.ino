@@ -5,6 +5,10 @@
 // Dependencies: AccelStepper Library (Install via Arduino Library Manager)
 // NOTE: This code uses the Uno's Hardware Serial (pins D0/D1) for communication 
 // with the ESP32. You must disconnect the ESP32 during Uno code upload.
+//
+// By John Durham @kilodelta8
+// 10/27/2025
+// CIS 2427 IoT Fundamentals
 // ====================================================================
 
 #include <AccelStepper.h>

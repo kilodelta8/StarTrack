@@ -1,3 +1,9 @@
+
+# By John Durham @kilodelta8
+# 10/27/2025
+# CIS 2427 IoT Fundamentals
+
+
 import os
 import time
 import requests
