@@ -1,10 +1,352 @@
 {% extends 'base.html' %}
 
 {% block body %}
-<div class="jumbotron text-center">
-    <h1>Blogz</h1>
-    <p class="lead">Welcome the Star Track Project
-    </p>
-</div>
-<hr />
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Star Track: Satellite Rotator Control</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom font and basic styling */
+        body { font-family: 'Inter', sans-serif; background-color: #0d1117; color: #e6edf3; }
+        .card { background-color: #161b22; border-radius: 0.5rem; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5); }
+        .btn { transition: all 0.2s; }
+        .btn:hover { transform: translateY(-1px); box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3); }
+    </style>
+</head>
+<body class="p-4 sm:p-8 min-h-screen">
+
+    <script>
+        // Use a standard placeholder for the ESP32 IP, which will be updated by the server logic
+        const ESP32_IP_PLACEHOLDER = '192.168.4.1';
+        
+        // --- State Management ---
+        let trajectoryString = "";
+        let isCalculating = false;
+        let isTracking = false;
+        let statusIntervalId = null;
+
+        // --- Utility Functions ---
+
+        /** Fetches current status from the Flask API, which in turn polls the ESP32. */
+        async function fetchStatus() {
+            const statusBox = document.getElementById('status-box');
+            
+            try {
+                // FIX: Changed from '/api/status' to 'api/status' to ensure proper URL resolution
+                const response = await fetch('api/status');
+                const data = await response.json();
+                
+                // Update UI based on reported status
+                const sysStatus = data.status || "UNKNOWN";
+                const time = data.epoch_time ? new Date(data.epoch_time * 1000).toLocaleTimeString() : 'N/A';
+                
+                let statusClass = "bg-gray-700";
+                if (sysStatus === 'IDLE' || sysStatus === 'READY_TO_TRACK') statusClass = "bg-green-600";
+                else if (sysStatus === 'TRACKING' || sysStatus === 'HOMING') statusClass = "bg-yellow-600 animate-pulse";
+                else if (sysStatus === 'ERROR' || sysStatus === 'OFFLINE') statusClass = "bg-red-700";
+                
+                statusBox.className = `card p-4 flex items-center ${statusClass}`;
+                document.getElementById('sys-status').textContent = sysStatus;
+                document.getElementById('local-time').textContent = time;
+                
+                // Update Az/El position if available from the ESP32 status
+                // NOTE: The ESP32 is programmed to send this data via serial to the flask app 
+                // but for this mock, we'll just check if the data keys exist.
+                const az = data.azimuth ? `${data.azimuth}°` : '--';
+                const el = data.elevation ? `${data.elevation}°` : '--';
+                document.getElementById('current-az').textContent = az;
+                document.getElementById('current-el').textContent = el;
+
+                isTracking = (sysStatus === 'TRACKING');
+                
+            } catch (error) {
+                console.error("Error fetching status:", error);
+                statusBox.className = "card p-4 flex items-center bg-red-800";
+                document.getElementById('sys-status').textContent = "DISCONNECTED";
+                isTracking = false;
+            }
+
+            // Update button visibility
+            document.getElementById('upload-button').disabled = isTracking || isCalculating;
+            document.getElementById('home-button').disabled = isTracking;
+            document.getElementById('stop-button').disabled = !isTracking;
+        }
+
+        /** Clears the current trajectory string and resets UI state. */
+        function resetTrajectory() {
+            trajectoryString = "";
+            document.getElementById('trajectory-output').value = "No trajectory calculated yet.";
+            document.getElementById('upload-button').textContent = "3. Upload & Start Tracking";
+            document.getElementById('upload-button').classList.remove('bg-green-500');
+            document.getElementById('upload-button').classList.add('bg-gray-600');
+            document.getElementById('upload-button').disabled = true;
+        }
+
+
+        // --- Interaction Handlers ---
+
+        /** Step 2: Calculate trajectory from TLE and Observer Location */
+        async function handleCalculate() {
+            if (isCalculating) return;
+
+            resetTrajectory(); 
+            isCalculating = true;
+            document.getElementById('calc-button').textContent = "Calculating...";
+            document.getElementById('calc-button').disabled = true;
+
+            const lat = document.getElementById('obs-lat').value;
+            const lon = document.getElementById('obs-lon').value;
+            
+            try {
+                // FIX: Changed from '/api/calculate' to 'api/calculate'
+                const response = await fetch('api/calculate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ latitude: lat, longitude: lon })
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    trajectoryString = data.trajectory_string;
+                    const pointCount = trajectoryString.split('|').length;
+                    document.getElementById('trajectory-output').value = `Trajectory Calculated: ${pointCount} points.\nReady for Upload.`;
+                    
+                    document.getElementById('upload-button').disabled = false;
+                    document.getElementById('upload-button').classList.remove('bg-gray-600');
+                    document.getElementById('upload-button').classList.add('bg-green-500');
+                    alertModal("Calculation Success", data.message, "success");
+                } else {
+                    document.getElementById('trajectory-output').value = `Calculation Failed: ${data.message}`;
+                    alertModal("Calculation Failed", data.message, "error");
+                }
+            } catch (error) {
+                alertModal("Network Error", "Could not connect to Flask server.", "error");
+                document.getElementById('trajectory-output').value = `Server communication error.`;
+            } finally {
+                isCalculating = false;
+                document.getElementById('calc-button').textContent = "2. Calculate Trajectory";
+                document.getElementById('calc-button').disabled = false;
+            }
+        }
+
+        /** Step 3: Upload the calculated DSV string to the ESP32 */
+        async function handleUploadAndStart() {
+            if (trajectoryString.length === 0 || isTracking) return;
+
+            document.getElementById('upload-button').textContent = "Uploading...";
+            document.getElementById('upload-button').disabled = true;
+
+            try {
+                // FIX: Changed from '/api/upload_and_start' to 'api/upload_and_start'
+                const response = await fetch('api/upload_and_start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ trajectory_string: trajectoryString })
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    alertModal("Upload Success", "Tracking engine has been commanded to start. Polling status now...", "success");
+                } else {
+                    alertModal("Upload Failed", data.message, "error");
+                }
+            } catch (error) {
+                alertModal("Network Error", "Could not reach the ESP32 via Flask server. Check the IP.", "error");
+            } finally {
+                document.getElementById('upload-button').textContent = "3. Upload & Start Tracking";
+                document.getElementById('upload-button').disabled = isTracking;
+            }
+        }
+
+        /** Command Handler (HOME / STOP) */
+        async function sendCommand(cmd) {
+            if (cmd === 'HOME' && isTracking) return;
+            if (cmd === 'STOP' && !isTracking) return;
+            
+            const btn = document.getElementById(`${cmd.toLowerCase()}-button`);
+            const originalText = btn.textContent;
+            btn.textContent = `Sending ${cmd}...`;
+            btn.disabled = true;
+            
+            try {
+                // FIX: Changed from '/api/command' to 'api/command'
+                const response = await fetch('api/command', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ cmd: cmd })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    alertModal("Command Sent", `Successfully sent command: ${cmd}`, "success");
+                } else {
+                    alertModal("Command Failed", data.message, "error");
+                }
+            } catch (error) {
+                alertModal("Network Error", `Could not communicate with ESP32 to send ${cmd}`, "error");
+            } finally {
+                btn.textContent = originalText;
+                // Re-enable based on current tracking state from status poll
+                fetchStatus(); 
+            }
+        }
+        
+        /** Custom Alert Modal (No alert() allowed) */
+        function alertModal(title, message, type) {
+            const modal = document.getElementById('modal-container');
+            const icon = document.getElementById('modal-icon');
+            icon.innerHTML = type === 'success' 
+                ? `<svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>` 
+                : `<svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.3 16c-.77 1.333.192 3 1.732 3z" /></svg>`;
+            
+            document.getElementById('modal-title').textContent = title;
+            document.getElementById('modal-message').textContent = message;
+            
+            modal.classList.remove('hidden');
+            setTimeout(() => modal.classList.add('opacity-100'), 10);
+            
+            // Auto-hide after 3 seconds
+            setTimeout(() => {
+                modal.classList.remove('opacity-100');
+                setTimeout(() => modal.classList.add('hidden'), 500);
+            }, 3000);
+        }
+
+        // --- Initialization ---
+        window.onload = function() {
+            // Set default location
+            document.getElementById('obs-lat').value = '39.86';
+            document.getElementById('obs-lon').value = '-84.38';
+
+            // Start polling the status every 2 seconds
+            fetchStatus();
+            statusIntervalId = setInterval(fetchStatus, 2000);
+
+            // Attach event listeners
+            document.getElementById('calc-button').addEventListener('click', handleCalculate);
+            document.getElementById('upload-button').addEventListener('click', handleUploadAndStart);
+            document.getElementById('home-button').addEventListener('click', () => sendCommand('HOME'));
+            document.getElementById('stop-button').addEventListener('click', () => sendCommand('STOP'));
+        };
+        
+        window.onbeforeunload = function() {
+            if (statusIntervalId) {
+                clearInterval(statusIntervalId);
+            }
+        };
+    </script>
+
+    <header class="text-center mb-8">
+        <h1 class="text-4xl font-extrabold text-blue-400">STAR TRACK</h1>
+        <p class="text-xl text-gray-400 mt-2">Satellite Rotator Web Interface</p>
+    </header>
+
+    <div class="max-w-4xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        <!-- Status & Control Panel (Column 1) -->
+        <div class="lg:col-span-1 space-y-6">
+            <h2 class="text-2xl font-semibold mb-4 text-blue-300">System Status</h2>
+            
+            <!-- System Status Indicator -->
+            <div id="status-box" class="card p-4 flex items-center bg-gray-700 transition duration-500">
+                <span id="modal-icon" class="text-2xl mr-3">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                </span>
+                <div class="flex-grow">
+                    <p class="text-lg font-bold">Status: <span id="sys-status">INIT</span></p>
+                    <p class="text-sm text-gray-300">Clock: <span id="local-time">--</span> (UTC)</p>
+                </div>
+            </div>
+
+            <!-- Current Position -->
+            <div class="card p-4">
+                <h3 class="text-xl font-medium mb-3 text-blue-400">Current Position</h3>
+                <div class="space-y-2">
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-400">Azimuth (Horizontal):</span>
+                        <span id="current-az" class="text-xl font-mono text-green-400">--</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-400">Elevation (Vertical):</span>
+                        <span id="current-el" class="text-xl font-mono text-green-400">--</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Manual Controls -->
+            <div class="card p-4 space-y-4">
+                <h3 class="text-xl font-medium text-blue-400">Direct Controls</h3>
+                <button id="home-button" onclick="sendCommand('HOME')" class="btn w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg shadow-lg">
+                    1. HOME Axes (0° Az/El)
+                </button>
+                <button id="stop-button" onclick="sendCommand('STOP')" disabled class="btn w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg shadow-lg">
+                    STOP Tracking
+                </button>
+            </div>
+        </div>
+        
+        <!-- Trajectory Planning (Columns 2 & 3) -->
+        <div class="lg:col-span-2 space-y-6">
+            <h2 class="text-2xl font-semibold mb-4 text-blue-300">Trajectory Planning</h2>
+            
+            <!-- Satellite Selection (Mock) -->
+            <div class="card p-6">
+                <h3 class="text-xl font-medium mb-3 text-blue-400">Target & Location</h3>
+                
+                <div class="mb-4">
+                    <label class="block text-gray-400 text-sm font-bold mb-2">Satellite TLE (Currently Mock ISS)</label>
+                    <textarea readonly class="shadow appearance-none border border-gray-700 rounded w-full py-2 px-3 text-gray-300 leading-tight focus:outline-none focus:shadow-outline bg-gray-800" rows="3">ISS (ZARYA)
+1 25544U 98067A   25305.50000000  .00002130  00000+0  42173-4 0  9999
+2 25544  51.6421 213.6268 0005500 240.2789 119.7211 15.49479308472496</textarea>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="obs-lat" class="block text-gray-400 text-sm font-bold mb-2">Observer Latitude (°)</label>
+                        <input id="obs-lat" type="number" step="0.01" class="shadow appearance-none border border-gray-700 rounded w-full py-2 px-3 text-gray-300 bg-gray-800 focus:ring-blue-500" value="39.86">
+                    </div>
+                    <div>
+                        <label for="obs-lon" class="block text-gray-400 text-sm font-bold mb-2">Observer Longitude (°)</label>
+                        <input id="obs-lon" type="number" step="0.01" class="shadow appearance-none border border-gray-700 rounded w-full py-2 px-3 text-gray-300 bg-gray-800 focus:ring-blue-500" value="-84.38">
+                    </div>
+                </div>
+
+                <button id="calc-button" class="btn w-full mt-6 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-lg">
+                    2. Calculate Trajectory
+                </button>
+            </div>
+
+            <!-- Trajectory Output -->
+            <div class="card p-6">
+                <h3 class="text-xl font-medium mb-3 text-blue-400">Calculated Trajectory</h3>
+                <textarea id="trajectory-output" readonly class="shadow appearance-none border border-gray-700 rounded w-full py-2 px-3 h-32 text-gray-300 bg-gray-800 font-mono text-sm" placeholder="T1,Az1,El1|T2,Az2,El2|..."></textarea>
+                <button id="upload-button" disabled class="btn w-full mt-4 bg-gray-600 hover:bg-green-600 text-white font-bold py-3 px-4 rounded-lg shadow-lg">
+                    3. Upload & Start Tracking
+                </button>
+                <p class="text-sm text-gray-500 mt-2">Data will be sent to the ESP32 at `192.168.4.1`</p>
+            </div>
+            
+        </div>
+    </div>
+    
+    <!-- Custom Modal Container (Hidden by default) -->
+    <div id="modal-container" class="fixed inset-0 bg-black bg-opacity-75 hidden flex items-center justify-center transition-opacity duration-500 opacity-0 z-50">
+        <div class="card p-6 max-w-sm w-full transform transition-transform duration-300">
+            <h3 id="modal-title" class="text-xl font-bold mb-2 text-white"></h3>
+            <p id="modal-message" class="text-gray-300"></p>
+            <button onclick="document.getElementById('modal-container').classList.add('hidden')" class="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-lg">Close</button>
+        </div>
+    </div>
+
+</body>
+</html>
+
+
 {% endblock %}
