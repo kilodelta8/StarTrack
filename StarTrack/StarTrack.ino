@@ -15,7 +15,7 @@
 
 // --- System Configuration and Motor/Driver Setup ---
 
-// Define Uno Pins for DRV8825 Drivers (as per build_instructions.md)
+// Define Uno Pins for DRV8825 Drivers (as per BUILDPLANS.md)
 // Azimuth (Horizontal Rotation)
 #define AZ_STEP_PIN 2 // Digital 2
 #define AZ_DIR_PIN  3 // Digital 3
@@ -152,7 +152,7 @@ void homeAxes() {
     stepperEl.run();
   }
   
-  // Set this position as the zero reference (Horizontal, 0 degrees)
+  // Set this position as the zero reference (Horizontal, 0 degrees) !!! 15 degrees declination for my location !!!
   stepperEl.setCurrentPosition(0);
   Serial.println("Elevation Homing Complete.");
 
