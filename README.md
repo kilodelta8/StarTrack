@@ -2,7 +2,7 @@
 
 ![Star Track Project Logo](./assets/logo003.png)
 <div style="text-align: center;">
-  ![alt text](your-image-url.jpg "Optional Title")
+  ![alt text](/assets/logo003.png)
 </div>
 
 ## Phase 1: Planning and System Design (Steps 1 & 2)
