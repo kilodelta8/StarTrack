@@ -121,5 +121,17 @@ The *ESP32* will serve as the system's authoritative clock.
 *   **Command Parsing (Uno):** Develop code on the Arduino to receive, parse the DSV string into a motor buffer (using the custom `TrackingEngine`), and execute the tracking routine precisely against the synchronized time.
 
 ## Phase 4: Testing, Calibration, and Reporting (Steps 5, 6, & 7)
+The final stages involve rigorous testing and documentation.
+4.1 Unit Testing
+Test the Flask SGP4 calculator against known satellite paths.
+Test the Arduino's stepper control for movement accuracy (degrees moved vs. commanded degrees).
+Test the Wi-Fi connection and data transfer reliability.
+4.2 System Integration and Field Test
+Perform a full end-to-end test: Flask calculates, sends data, Arduino tracks.
+Field Calibration: Calibrate the system in the field, aligning it to True North and adjusting for any mechanical offsets or errors in the Az/El calculation.
+4.3 Documentation and Final Report
+Finalize the Build Instructions (Step 6) including parts lists, assembly diagrams, and wiring schematics.
+Prepare the Final Report (Step 7) detailing the design choices, test results (accuracy), and potential improvements.
 
-... (Remaining sections unchanged)
+[Build Plans](BUILDPLANS.md)
+
