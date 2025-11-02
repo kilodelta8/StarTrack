@@ -1,6 +1,9 @@
 # Star Track Project: Satellite Tracking Antenna
 
 ![Star Track Project Logo](./assets/logo003.png)
+<div style="text-align: center;">
+  ![alt text](your-image-url.jpg "Optional Title")
+</div>
 
 ## Phase 1: Planning and System Design (Steps 1 & 2)
 
