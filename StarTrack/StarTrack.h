@@ -10,6 +10,7 @@ class StarTrack {
         ~StarTrack();
         void initialize();
         void update();
-        void render();};
+        void render();
+    };
 
 #endif // STARTRACK_H
