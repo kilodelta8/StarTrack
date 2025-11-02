@@ -1,5 +1,7 @@
 # Star Track Project: Satellite Tracking Antenna
 
+![Star Track Web App Interface](./assets/WebApp01.png)
+
 ## Phase 1: Planning and System Design (Steps 1 & 2)
 
 This phase defines the system architecture, chooses the core components, and finalizes the requirements for the hardware and software.

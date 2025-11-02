@@ -106,7 +106,7 @@ def calculate_trajectory(tle_lines, observer_lat, observer_lon, observer_alt_m):
 @app.route('/')
 def index():
     """Serves the main HTML interface."""
-    return render_template_string(open("index.html").read())
+    return render_template_string(open("templates/index.html").read())
 
 @app.route('/api/calculate', methods=['POST'])
 def api_calculate():
@@ -219,8 +219,8 @@ def api_status():
 # Run the Flask app
 if __name__ == '__main__':
     # Ensure the required index.html exists when running locally
-    if not os.path.exists("index.html"):
+    if not os.path.exists("templates/index.html"):
         print("FATAL: index.html is missing. Cannot run server.")
     else:
         # Use debug mode for development
-        app.run(debug=True, host='0.0.0.0', port=5000)
+        app.run(debug=True, host='0.0.0.0', port=5020)
