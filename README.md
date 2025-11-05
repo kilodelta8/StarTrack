@@ -22,24 +22,24 @@ This list details the specific components recommended to meet the precision and 
 | --------------------------------- | ------------------------------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Microcontroller (Primary)**     | Motor control and interface                 | *Arduino Uno*                           | Confirmed by user. Will be responsible for Step/Dir motor signals.                                                                                           |
 | **Microcontroller (Secondary/Comm)** | Wi-Fi communication, time sync, data relay  | *ESP32* (NodeMCU or similar dev board)  | Confirmed: Excellent choice for robust Wi-Fi and data handling. Communicates with Uno via Serial (UART).                                                   |
-| **Motors (2x) - Azimuth & Elevation** | Precise, geared rotation                    | *NEMA 17 Stepper Motors* (e.g., 42BYGHW609) | Must be sized to handle up to $\approx 2.1\text{kg}$ ($4.6\text{lbs}$) payload weight (worst-case estimate). High-torque models are required.                   |
-| **Motor Drivers (2x)**            | Driving the steppers                        | *DRV8825 Module* (e.g., HiLetgo)        | Confirmed: Supports $1/32$ microstepping for high resolution and smooth motion. Must be current-limited to protect the motors.                               |
-| **Power Supply**                  | Powering motors and electronics             | *12V DC, 5A Adapter* (Confirmed)        | Robust power source for the motors. A high-quality $5\text{V}$ regulator will be needed for the ESP32 and Arduino logic if the Uno's barrel jack isn't used. |
-| **Antenna**                       | Tracking target                             | *Lightweight Yagi Antenna*              | Design constraint: Max estimated weight of $\approx 2.1\text{kg}$ ($4.6\text{lbs}$).                                                                          |
+| **Motors (2x) - Azimuth & Elevation** | Precise, geared rotation                    | *NEMA 17 Stepper Motors* (e.g., 42BYGHW609) | Must be sized to handle up to approx 2.1kg  (4.6lbs) payload weight (worst-case estimate). High-torque models are required.                   |
+| **Motor Drivers (2x)**            | Driving the steppers                        | *DRV8825 Module* (e.g., HiLetgo)        | Confirmed: Supports 1/32 microstepping for high resolution and smooth motion. Must be current-limited to protect the motors.                               |
+| **Power Supply**                  | Powering motors and electronics             | *12V DC, 5A Adapter* (Confirmed)        | Robust power source for the motors. A high-quality 5V regulator will be needed for the ESP32 and Arduino logic if the Uno's barrel jack isn't used. |
+| **Antenna**                       | Tracking target                             | *Lightweight Yagi Antenna*              | Design constraint: Max estimated weight of approx 2.1kg (4.6lbs).                                                                          |
 | **Mounting**                      | Structural stability                        | *Tripod with Custom 2-Axis Mount*       | The design must incorporate gear reduction for both axes (see 1.2.1).                                                                                        |
 
 #### 1.2.1 Critical Mechanical Drive System Design
 
 The raw torque of a *NEMA 17* motor is insufficient to move a yagi antenna with enough precision. Gear reduction is **mandatory** on both axes.
 
-*   **Antenna Weight Assumption:** Planning for a worst-case payload of $2.1\text{kg}$ ($4.6\text{lbs}$). This will influence the torque calculation.
+*   **Antenna Weight Assumption:** Planning for a worst-case payload of 2.1kg (4.6lbs). This will influence the torque calculation.
 *   **Dual-Path Design Approach:** We will track two gear system options for the build instructions to balance precision and cost:
     *   **High-Precision/High-Cost (Worm Gear Drive):** Offers high ratio, self-locking capability, and near-zero backlash, making it superior for maintaining position in wind.
     *   **Budget/Medium-Precision (High-Ratio Belt Drive):** More cost-effective and easier to 3D print or source, but may require slightly more complex software damping to manage potential backlash.
-*   **Impact of Gearing on Precision (Example using $100:1$ ratio):**
-    If we use a $100:1$ gear ratio and the *DRV8825* driver on $1/32$ microstepping:
-    $$\text{Angular Resolution} = \frac{\text{Step Angle}}{\text{Gear Ratio} \times \text{Microsteps}} = \frac{1.8^\circ}{100 \times 32} \approx 0.00056^\circ$$
-    This level of precision is more than adequate for LEO (Low Earth Orbit) satellite tracking, which typically requires accuracy better than $\pm 1^\circ$.
+*   **Impact of Gearing on Precision (Example using 100:1 ratio):**
+    If we use a 100:1 gear ratio and the *DRV8825* driver on 1/32 microstepping:
+    {Angular Resolution} = \frac{\text{Step Angle}}{\text{Gear Ratio} \times \text{Microsteps}} = \frac{1.8^\circ}{100 \times 32} \approx 0.00056^\circ
+    This level of precision is more than adequate for LEO (Low Earth Orbit) satellite tracking, which typically requires accuracy better than pm 1^\circ.
 
 ### 1.3 Orbital Mechanics & Data Flow Definition
 
@@ -61,7 +61,7 @@ To ensure reliable, synchronized, two-way communication, we will use a Hybrid Se
 
 #### 3.1.1 Data Format and Custom Library (Q1 Answer)
 
-*   **Communication Format (Flask $\rightarrow$ ESP32):**
+*   **Communication Format (Flask rightarrow ESP32):**
     We will use a simple, efficient Custom Delimiter-Separated Value (DSV) string format for the trajectory data, as it's lightweight and fast for the Arduino to parse.
 
 *   **Trajectory Packet Example (Sent from Flask):** A series of comma-separated tracking points, each separated by a pipe (`|`).
@@ -80,7 +80,7 @@ To ensure reliable, synchronized, two-way communication, we will use a Hybrid Se
 
 The Flask app will poll the *ESP32* for status, establishing a reliable two-way flow without complex WebSockets.
 
-*   **Flask $\rightarrow$ ESP32 (Command/Data):** Simple HTTP `POST` requests.
+*   **Flask rightarrow ESP32 (Command/Data):** Simple HTTP `POST` requests.
     *   `/upload_trajectory`: Flask posts the entire tracking DSV string batch.
     *   `/command`: Flask posts simple JSON commands.
         ```json
@@ -88,7 +88,7 @@ The Flask app will poll the *ESP32* for status, establishing a reliable two-way 
         {"cmd": "HOME"}
         ```
 
-*   **ESP32 $\rightarrow$ Flask (Status):** Flask polls the *ESP32*'s internal web server via a simple HTTP `GET` request.
+*   **ESP32 rightarrow Flask (Status):** Flask polls the *ESP32*'s internal web server via a simple HTTP `GET` request.
     *   **Endpoint:** `/status`
     *   **Response (JSON):** A lightweight JSON object containing the current operational state:
         ```json
@@ -108,7 +108,7 @@ The Flask app will poll the *ESP32* for status, establishing a reliable two-way 
 The *ESP32* will serve as the system's authoritative clock.
 
 *   **NTP Integration (on ESP32):** The *ESP32* will connect to an NTP server (Network Time Protocol) over Wi-Fi to get accurate UTC time (Unix Epoch). This is highly reliable and precise enough for satellite tracking.
-*   **Time Relay (ESP32 $\rightarrow$ Uno):**
+*   **Time Relay (ESP32 rightarrow Uno):**
     *   The *ESP32* will send the current UTC timestamp to the *Arduino Uno* whenever a new trajectory is uploaded, and periodically (e.g., every 5 minutes) to correct drift.
     *   The *Arduino Uno*'s `TrackingEngine` will start its timing and execute the trajectory points based on this initial received UTC timestamp.
 
