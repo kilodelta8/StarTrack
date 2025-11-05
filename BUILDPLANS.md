@@ -1,5 +1,5 @@
 # Star Track Project: Apparatus Build Instructions (Step 3)
-
+<!--
 This document provides detailed assembly instructions for the mechanical and electrical components of the Star Track satellite rotator. Choose one option (A or B) for both the Azimuth and Elevation axes.
 
 ## I. Materials Check and Preparation
@@ -113,5 +113,5 @@ V_REF = {I_{MAX}} \times 0.9
 *   **Pass-Throughs:** Use cable glands or sealed grommets for the motor, switch, and power cables to maintain the enclosure's weather resistance.
 *   **Initial Power Test:** Apply 12V power and verify the 5V rail is correct. **Do not** connect the Uno/ESP32 USB during this test unless necessary, relying solely on the 5V regulator.
 
-
+-->
 

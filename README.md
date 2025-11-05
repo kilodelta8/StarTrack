@@ -3,7 +3,8 @@
 ![Star Track Project Logo](./assets/logo_final_001.png)
 
 # A hot mess in the works.  Stand by.
-
+```markdown
+<!--
 ## Phase 1: Planning and System Design (Steps 1 & 2)
 
 This phase defines the system architecture, chooses the core components, and the hardware and software.
@@ -67,9 +68,9 @@ To ensure reliable, synchronized, two-way communication, we will use a Hybrid Se
     We will use a simple, efficient Custom Delimiter-Separated Value (DSV) string format for the trajectory data, as it's lightweight and fast for the Arduino to parse.
 
 *   **Trajectory Packet Example (Sent from Flask):** A series of comma-separated tracking points, each separated by a pipe (`|`).
-    ```
+    
     <Timestamp1>,<Azimuth1>,<Elevation1>|<Timestamp2>,<Azimuth2>,<Elevation2>|...
-    ```
+    
     The timestamp must be in a standard format (e.g., Unix Epoch Time).
 
 *   **Microcontroller Logic:**
@@ -88,7 +89,7 @@ The Flask app will poll the *ESP32* for status, establishing a reliable two-way 
         ```json
         {"cmd": "STOP"}
         {"cmd": "HOME"}
-        ```
+        
 
 *   **ESP32 rightarrow Flask (Status):** Flask polls the *ESP32*'s internal web server via a simple HTTP `GET` request.
     *   **Endpoint:** `/status`
@@ -101,7 +102,7 @@ The Flask app will poll the *ESP32* for status, establishing a reliable two-way 
           "target": 121.0,
           "time": 1678886400
         }
-        ```
+        
 
 *   **States:** We will define four primary states: `IDLE`, `RECEIVING_DATA`, `TRACKING`, and `ERROR`. The Flask app will use this state to enable/disable UI buttons (e.g., disabling new trajectory uploads while the state is `TRACKING`).
 
@@ -138,6 +139,8 @@ Field Calibration: Calibrate the system in the field, aligning it to True North 
 4.3 Documentation and Final Report
 Finalize the Build Instructions (Step 6) including parts lists, assembly diagrams, and wiring schematics.
 Prepare the Final Report (Step 7) detailing the design choices, test results (accuracy), and potential improvements.
+-->
+
 
 [Build Plans](BUILDPLANS.md)
 
