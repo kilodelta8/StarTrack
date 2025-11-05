@@ -2,9 +2,11 @@
 
 ![Star Track Project Logo](./assets/logo_final_001.png)
 
+# A hot mess in the works.  Stand by.
+
 ## Phase 1: Planning and System Design (Steps 1 & 2)
 
-This phase defines the system architecture, chooses the core components, and finalizes the requirements for the hardware and software.
+This phase defines the system architecture, chooses the core components, and the hardware and software.
 
 ### 1.1 System Architecture Overview
 
