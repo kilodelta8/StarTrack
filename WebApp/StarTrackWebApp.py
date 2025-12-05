@@ -8,15 +8,167 @@ import os
 import time
 import requests
 import json
-from flask import Flask, render_template_string, request, jsonify
-from skyfield.api import load, EarthSatellite, Topos, utc
+import threading
+import serial
+import serial.tools.list_ports
 
 app = Flask(__name__)
 
 # --- CONFIGURATION ---
-# IMPORTANT: Replace with the IP address of your ESP32 module when deployed!
-ESP32_IP_ADDRESS = "192.168.4.1" 
-ESP32_BASE_URL = f"http://{ESP32_IP_ADDRESS}"
+ARDUINO_BAUD_RATE = 115200
+GPS_BAUD_RATE = 9600
+# Ports will be auto-detected or specified here
+# ARDUINO_PORT = "/dev/ttyACM0" 
+# GPS_PORT = "/dev/ttyUSB0"
+
+# --- Global State ---
+system_status = {
+    "status": "DISCONNECTED", 
+    "az": 0.0, 
+    "el": 0.0, 
+    "time": 0,
+    "gps_lat": None,
+    "gps_lon": None,
+    "gps_fix": False
+}
+
+# --- Serial Managers ---
+
+class ArduinoController:
+    def __init__(self, baud_rate=115200):
+        self.baud_rate = baud_rate
+        self.serial_conn = None
+        self.lock = threading.Lock()
+        self.running = True
+        self.connect()
+
+        # Start listener thread
+        self.thread = threading.Thread(target=self._listen, daemon=True)
+        self.thread.start()
+
+    def connect(self):
+        # Auto-detect Arduino (Uno usually has 'Arduino' or 'usbmodem' in name, or just /dev/ttyACM*)
+        port = None
+        ports = list(serial.tools.list_ports.comports())
+        for p in ports:
+            # Simple heuristic for Pi/Mac
+            if "Arduino" in p.description or "usbmodem" in p.device or "ACM" in p.device:
+                port = p.device
+                break
+        
+        if port:
+            try:
+                self.serial_conn = serial.Serial(port, self.baud_rate, timeout=1)
+                print(f"Connected to Arduino on {port}")
+                system_status["status"] = "IDLE"
+            except Exception as e:
+                print(f"Failed to connect to Arduino on {port}: {e}")
+        else:
+            print("Arduino not found.")
+
+    def _listen(self):
+        while self.running:
+            if self.serial_conn and self.serial_conn.is_open:
+                try:
+                    if self.serial_conn.in_waiting:
+                        line = self.serial_conn.readline().decode('utf-8', errors='ignore').strip()
+                        self._parse_line(line)
+                except Exception as e:
+                    print(f"Serial Read Error: {e}")
+                    system_status["status"] = "ERROR"
+            time.sleep(0.01)
+
+    def _parse_line(self, line):
+        # Handle STATUS_UPDATE:TRACKING, etc.
+        if line.startswith("STATUS_UPDATE:"):
+            system_status["status"] = line.split(":")[1]
+        # Handle POS:Az,El,Time
+        elif line.startswith("POS:"):
+            parts = line.split(":")[1].split(",")
+            if len(parts) >= 3:
+                system_status["az"] = float(parts[0])
+                system_status["el"] = float(parts[1])
+                system_status["time"] = int(float(parts[2]))
+
+    def send_command(self, cmd):
+        if self.serial_conn and self.serial_conn.is_open:
+            with self.lock:
+                full_cmd = f"{cmd}\n"
+                self.serial_conn.write(full_cmd.encode('utf-8'))
+                return True
+        return False
+
+class GPSReader:
+    def __init__(self, baud_rate=9600):
+        self.baud_rate = baud_rate
+        self.serial_conn = None
+        self.running = True
+        self.connect()
+        
+        self.thread = threading.Thread(target=self._listen, daemon=True)
+        self.thread.start()
+
+    def connect(self):
+        # GPS is often /dev/ttyUSB0 or /dev/serial0 on Pi
+        # We will try to find a USB serial device that ISN'T the Arduino
+        port = None
+        ports = list(serial.tools.list_ports.comports())
+        for p in ports:
+            # Skip likely Arduino ports
+            if "Arduino" not in p.description and "ACM" not in p.device:
+                # This is a guess; often GPS is USB-Serial Controller
+                if "USB" in p.device or "serial" in p.device:
+                    port = p.device
+                    break
+        
+        if port:
+            try:
+                self.serial_conn = serial.Serial(port, self.baud_rate, timeout=1)
+                print(f"Connected to GPS on {port}")
+            except Exception as e:
+                print(f"Failed to connect to GPS: {e}")
+        else:
+            print("GPS not found. Using defaults.")
+
+    def _listen(self):
+        while self.running:
+            if self.serial_conn and self.serial_conn.is_open:
+                try:
+                    line = self.serial_conn.readline().decode('utf-8', errors='ignore').strip()
+                    if line.startswith("$GPGGA") or line.startswith("$GNGGA"):
+                        self._parse_gga(line)
+                except Exception as e:
+                    pass # GPS errors are common, just ignore
+            time.sleep(0.1)
+
+    def _parse_gga(self, line):
+        # $GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,*47
+        try:
+            parts = line.split(",")
+            if parts[6] != '0': # Fix quality: 0 = invalid
+                lat_raw = parts[2]
+                lat_dir = parts[3]
+                lon_raw = parts[4]
+                lon_dir = parts[5]
+                
+                if lat_raw and lon_raw:
+                    # Convert DDMM.MMMM to Decimal Degrees
+                    lat_deg = float(lat_raw[:2]) + float(lat_raw[2:]) / 60.0
+                    if lat_dir == 'S': lat_deg *= -1
+                    
+                    lon_deg = float(lon_raw[:3]) + float(lon_raw[3:]) / 60.0
+                    if lon_dir == 'W': lon_deg *= -1
+                    
+                    system_status["gps_lat"] = lat_deg
+                    system_status["gps_lon"] = lon_deg
+                    system_status["gps_fix"] = True
+        except:
+            pass
+
+# Initialize Controllers
+arduino = ArduinoController(baud_rate=ARDUINO_BAUD_RATE)
+gps = GPSReader(baud_rate=GPS_BAUD_RATE)
+
 
 # --- Mock TLE Data (International Space Station - ZARYA) ---
 # In a real application, you'd fetch this dynamically from celestrak.org
@@ -113,9 +265,15 @@ def api_calculate():
     """Calculates the trajectory and returns the DSV string."""
     try:
         data = request.json
-        # Extract location and TLE (using mock data for now)
-        lat = data.get('latitude', DEFAULT_LAT)
-        lon = data.get('longitude', DEFAULT_LON)
+        # Extract location: prioritize GPS if valid and not overridden by user
+        lat = data.get('latitude')
+        lon = data.get('longitude')
+        
+        # If user didn't provide specific coords, use GPS or Default
+        if lat is None:
+            lat = system_status["gps_lat"] if system_status["gps_fix"] else DEFAULT_LAT
+        if lon is None:
+            lon = system_status["gps_lon"] if system_status["gps_fix"] else DEFAULT_LON
         # TLE lines are often passed as a list of two strings
         tle = ISS_TLE_LINES 
         
@@ -143,29 +301,24 @@ def api_upload_and_start():
         return jsonify({"success": False, "message": "Missing trajectory string."}), 400
         
     try:
-        # 1. Send the data to the ESP32's upload endpoint
-        response = requests.post(
-            f"{ESP32_BASE_URL}/upload_trajectory",
-            data=trajectory_string,
-            headers={'Content-Type': 'text/plain'},
-            timeout=5 # Timeout after 5 seconds
-        )
-
-        if response.status_code == 200:
-            return jsonify({
-                "success": True,
-                "message": "Trajectory successfully uploaded and tracking initiated on ESP32.",
-                "esp32_response": response.text
-            })
-        else:
-            return jsonify({
-                "success": False, 
-                "message": f"ESP32 Upload Failed. Status Code: {response.status_code}",
-                "esp32_response": response.text
-            }), 502 # Bad Gateway
+        # 1. Send Trajectory Start Command
+        arduino.send_command("CMD:START_TRAJ")
+        time.sleep(0.5) # Give Uno a moment
+        
+        # 2. Sync Time (Current UTC Unix Epoch)
+        now_epoch = int(time.time())
+        arduino.send_command(f"TIME:{now_epoch}")
+        
+        # 3. Send Data
+        arduino.send_command(f"DATA:{trajectory_string}")
+        
+        return jsonify({
+            "success": True,
+            "message": "Trajectory sent to Arduino via Serial."
+        })
             
-    except requests.exceptions.RequestException as e:
-        return jsonify({"success": False, "message": f"Error connecting to ESP32 at {ESP32_IP_ADDRESS}: {str(e)}"}), 503 # Service Unavailable
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Serial Error: {str(e)}"}), 500
 
 @app.route('/api/command', methods=['POST'])
 def api_command():
@@ -177,44 +330,25 @@ def api_command():
         return jsonify({"success": False, "message": "Invalid command."}), 400
 
     try:
-        # Send the command to the ESP32's command endpoint
-        response = requests.post(
-            f"{ESP32_BASE_URL}/command",
-            json={"cmd": command},
-            timeout=5
-        )
+        # Send command to Arduino
+        full_cmd = f"CMD:{command}"
+        success = arduino.send_command(full_cmd)
         
-        if response.status_code == 200:
+        if success:
             return jsonify({
                 "success": True,
-                "message": f"Command '{command}' sent successfully.",
-                "esp32_response": response.text
+                "message": f"Command '{command}' sent to Arduino."
             })
         else:
-            return jsonify({
-                "success": False, 
-                "message": f"ESP32 Command Failed. Status Code: {response.status_code}",
-                "esp32_response": response.text
-            }), 502 
+            return jsonify({"success": False, "message": "Failed to write to Serial port."}), 500
             
-    except requests.exceptions.RequestException as e:
-        return jsonify({"success": False, "message": f"Error connecting to ESP32 at {ESP32_IP_ADDRESS}: {str(e)}"}), 503
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Error: {str(e)}"}), 503
 
 @app.route('/api/status', methods=['GET'])
 def api_status():
     """Polls the ESP32 for the current system status, clock, and position."""
-    try:
-        response = requests.get(f"{ESP32_BASE_URL}/status", timeout=2)
-        
-        if response.status_code == 200:
-            # ESP32 returns JSON containing 'status', 'epoch_time', and optionally 'az'/'el'
-            return jsonify(response.json())
-        else:
-            return jsonify({"status": "OFFLINE", "message": f"ESP32 status error: {response.status_code}"}), 502
-            
-    except requests.exceptions.RequestException:
-        # If connection fails, assume offline
-        return jsonify({"status": "OFFLINE", "message": f"Could not reach ESP32 at {ESP32_IP_ADDRESS}"}), 503
+    return jsonify(system_status)
 
 # Run the Flask app
 if __name__ == '__main__':

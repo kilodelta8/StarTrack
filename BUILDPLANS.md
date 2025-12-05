@@ -9,12 +9,12 @@ Ensure you have the following core components ready, plus your chosen mechanical
 | Component                            | Quantity  | Notes                                                        |
 | ------------------------------------ | --------- | ------------------------------------------------------------ |
 | *Arduino Uno*                        | 1         | Motor Control (Primary MCU)                                  |
-| *ESP32 Dev Board*                    | 1         | Wi-Fi/Time Sync/Communication                                |
-| *NEMA 17 Stepper Motor*              | 2         | One for Azimuth, one for Elevation                           |
+| *Raspberry Pi*                       | 1         | Host (Flask App, Kepler Calcs, GPS)                          |
+| *GPS Module*                         | 1         | USB or UART GPS for location data                            |
+| *NEMA 23 Stepper Motor*              | 2         | One for Azimuth, one for Elevation (Updated for heavier payload)|
 | *DRV8825 Driver*                     | 2         | Stepper motor drivers (plus spares)                          |
-| *12V  5A Power Supply* | 1         | Dedicated for the motors and drivers                         |
+| *12V/24V Power Supply*               | 1         | Dedicated for the NEMA 23 motors                             |
 | *Limit Switches*                     | 3         | 2 for Azimuth Home/Limits, 1 for Elevation Home          |
-| *5V Regulator*               | 1         | To step down 12V to clean 5V for the ESP32/Uno |
 | *Structural Material*                | As needed | 2020 Aluminum Extrusion or Plywood/PVC                       |
 | *Bearings*                           | 2-4     | Thrust or large radial bearings for axis support             |
 | *Wiring and Connectors*              | Various   | Power wires, signal wires, screw terminals                   |
@@ -85,9 +85,8 @@ V_REF = {I_{MAX}} \times 0.9
 *   Set `V_REF` to the calculated value (e.g., for a 1.5A motor, set `V_REF` to 1.35V). This protects the motor and driver.
 
 ### 4.2 Power Distribution
-
-*   **12\text{V} Rail:** Connect the 12V supply directly to the *DRV8825* motor power inputs (`VMOT` and `GND`).
-*   **5\text{V} Rail:** Use the separate 5V regulator to create a clean power source. Connect this 5V rail to the *Arduino Uno*'s `5V` pin and the *ESP32*'s `5V` input pin (`VBUS` or similar).
+*   **Motor Power:** Connect the 12V/24V supply directly to the *DRV8825* motor power inputs (`VMOT` and `GND`).
+*   **Logic Power:** The Arduino is powered via USB from the Raspberry Pi. The Pi requires its own 5V USB-C power supply.
 
 ### 4.3 Wiring Diagram (ESP32, Uno, Drivers, Switches)
 
@@ -99,12 +98,10 @@ V_REF = {I_{MAX}} \times 0.9
 | *Arduino Uno* | Digital 5     | Elevation DIR pin (DRV8825)   | Direction control                                                            |
 | *Arduino Uno* | A0            | Azimuth Home Switch           | Input with pull-up resistor                                                  |
 | *Arduino Uno* | A1            | Elevation Home Switch         | Input with pull-up resistor                                                  |
-| *Arduino Uno* | RX            | ESP32 TX pin                  | Serial communication (Data/Commands)                                         |
-| *Arduino Uno* | TX            | ESP32 RX pin                  | Serial communication (Status/Acks)                                           |
+| *Arduino Uno* | RX            | -                             | USB Serial used for Pi communication                         |
+| *Arduino Uno* | TX            | -                             | USB Serial used for Pi communication                         |
 | *DRV8825*     | M0, M1, M2    | Arduino GND or Digital Pins   | Set to 1/32 microstepping (all to HIGH/Floating, depending on your board) |
 | *DRV8825*     | ENABLE        | Arduino GND                   | Keep LOW for normal operation                                                |
-| *ESP32*       | D21 (TX)      | Arduino RX pin                | Hardware Serial connection                                                   |
-| *ESP32*       | D22 (RX)      | Arduino TX pin                | Hardware Serial connection                                                   |
 | *Switches*    | Signal Pin    | Arduino Analog Inputs         | Wired for Normally Closed (NC) using internal pull-ups for robustness.       |
 
 ### 4.4 Final Enclosure and Testing

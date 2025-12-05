@@ -1,10 +1,10 @@
 // ====================================================================
 // Star Track Project - Arduino Uno Tracking Engine Firmware (TrackingEngine)
-// Purpose: Receives trajectory data from ESP32, manages the real-time clock,
+// Purpose: Receives trajectory data from Raspberry Pi (via Serial), manages the real-time clock,
 //          implements homing, and executes precise, non-blocking motor tracking.
 // Dependencies: AccelStepper Library (Install via Arduino Library Manager)
 // NOTE: This code uses the Uno's Hardware Serial (pins D0/D1) for communication 
-// with the ESP32. You must disconnect the ESP32 during Uno code upload.
+// with the Pi (USB Serial).
 //
 // By John Durham @kilodelta8
 // 10/27/2025
